@@ -16,6 +16,7 @@ struct User {
     char pin[5];
     double balance;
     int credit_score;
+    double debt;
 };
 
 // VERIFY USER
@@ -29,11 +30,9 @@ int verifyUser(const char *name, const char *pin) {
             return 1; 
         }
     }
-
     fclose(file);
     return 0; 
 }
-
 
 // VERIFY PIN IS 4 DIGITS
 bool isValidPIN(const char *pin) {
@@ -41,25 +40,36 @@ bool isValidPIN(const char *pin) {
     return (strlen(pin) == 4 && strspn(pin, "0123456789") == 4);
 }
 
-
 // UPDATE USER BALANCE
 void updateUserBalance(const struct User *user, double newBalance) {
     FILE *file = fopen("clients.txt", "r+");
+    FILE *tempFile = fopen("temp.txt", "w");
 
     char line[256];
     while (fgets(line, sizeof(line), file)) {
         if (strstr(line, user->name) != NULL) {
             // Update the balance in the line
-            char updatedLine[256];
-            sprintf(updatedLine, "Name: %s | Email: %s | PIN: %s | Credit Score: %d | Balance: %.2lf\n", user->name, user->email, user->pin, user->credit_score, newBalance);
-            fseek(file, -strlen(line), SEEK_CUR); // Move the file pointer back to the beginning of the line
-            fputs(updatedLine, file); 
-            break;
+            char email[100];
+            int credit_score;
+
+            // Parse the existing email and credit score values
+            if (sscanf(line, "Name: %*s | Email: %[^|] | PIN: %*s | Credit Score: %d | Balance: %*f | Debt: %*f", email, &credit_score) == 2) {
+                // Write the updated line with the correct email and credit score
+                fprintf(tempFile, "Name: %s | Email: %s | PIN: %s | Credit Score: %d | Balance: %.2lf | Debt: %.2lf\n", user->name, email, user->pin, credit_score, newBalance, user->debt);
+            }
+        } else {
+            fputs(line, tempFile);
         }
     }
 
     fclose(file);
+    fclose(tempFile);
+
+    // Replace the original file with the temporary file
+    remove("clients.txt");
+    rename("temp.txt", "clients.txt");
 }
+
 
 // RECORD STOCK PRICE
 void recordStockPurchase(const struct User *user, const char *stockName, int shares) {
@@ -67,23 +77,175 @@ void recordStockPurchase(const struct User *user, const char *stockName, int sha
 
     // SAVE TO RECORDS
     char purchaseRecord[100];
-    sprintf(purchaseRecord, "%s | %s | %s | %d\n", user->name, user->email, stockName, shares);
+    sprintf(purchaseRecord, "%s | %s | %d\n", user->name, stockName, shares);
 
     fprintf(file, "%s", purchaseRecord);
-
     fclose(file);
+}
+
+// OPEN/CHECKING ACCOUNT
+void openCheckingAccount(struct User *user) {
+    printf("Enter the deposit amount: ");
+    double initialDeposit;
+    scanf("%lf", &initialDeposit);
+
+    if (initialDeposit < 0) {
+        printf("Invalid deposit amount.\n");
+    } else {
+        user->balance += initialDeposit;
+        printf("Checking account opened with a balance of $%.2lf\n\n\n", user->balance);
+        updateUserBalance(user, user->balance); 
+    }
+}
+
+// ACCESS ATM
+void accessATM(struct User *user) {
+    FILE *file = fopen("clients.txt", "r");
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        if (strstr(line, user->name) != NULL) {
+            sscanf(line, "Name: %*s | Email: %*s | PIN: %*s | Credit Score: %*d | Balance: %lf | Debt: %*lf", &(user->balance));
+            break;
+        }
+    }
+    fclose(file);
+
+    printf("\nBalance: %.2lf \n", user->balance);
+    printf("1. Withdraw\n");
+    printf("2. Deposit\n");
+    printf("Enter your choice: ");
+    int action;
+    scanf("%d", &action);
+
+    switch (action) {
+        case 1: // Withdraw
+            printf("Enter the withdrawal amount: ");
+            double withdrawalAmount;
+            scanf("%lf", &withdrawalAmount);
+
+            if (withdrawalAmount < 0 || withdrawalAmount > user->balance) {
+                printf("Invalid withdrawal amount or insufficient funds.\n");
+            } else {
+                user->balance -= withdrawalAmount;
+                printf("Withdrawal of $%.2lf successful.\nCurrent balance: $%.2lf\n", withdrawalAmount, user->balance);
+                updateUserBalance(user, user->balance); 
+            }
+            break;
+
+        case 2: // Deposit
+            printf("Enter the deposit amount: ");
+            double depositAmount;
+            scanf("%lf", &depositAmount);
+
+            if (depositAmount < 0) {
+                printf("Invalid deposit amount.\n");
+            } else {
+                user->balance += depositAmount;
+                printf("Deposit of $%.2lf successful.\nCurrent balance: %.2lf\n", depositAmount, user->balance);
+                updateUserBalance(user, user->balance); 
+            }
+            break;
+    }
+}
+
+
+// APPLY FOR A LOAN
+void applyForLoan(struct User *user) {
+    double loanAmount;
+    printf("Enter the loan amount: $");
+    scanf("%lf", &loanAmount);
+
+    if (loanAmount <= 0) {
+        printf("Invalid loan amount.\n");
+        return;
+    }
+
+    double interestRate;
+
+    if (user->credit_score >= 800) {
+        interestRate = 0.01; // 1% 
+    } else if (user->credit_score >= 740) {
+        interestRate = 0.02; // 2% 
+    } else if (user->credit_score >= 670) {
+        interestRate = 0.03; // 3% 
+    } else if (user->credit_score >= 580) {
+        interestRate = 0.04; // 4% 
+    } else { // credit too low
+        printf("Sorry, you did not qualify for a loan.\n");
+        return;
+    }
+
+    // Process the loan
+    double totalLoan = loanAmount * (1 + interestRate); // total amount to repay
+    user->debt += totalLoan; // Add debt with interest
+    user->balance = user->balance + loanAmount; // Add loan to balance
+
+    printf("Loan of $%.2lf approved with %.2lf%% interest. Debt: $%.2lf\n", loanAmount, interestRate * 100, user->debt);
+
+    updateUserBalance(user, user->balance); 
+}
+
+
+// BUY STOCKS
+void buyStocks(struct User *user) {
+    TickerInfo tickers[MAX_TICKERS];
+    int numTickers = 0;
+    FILE *stock_file;
+    char line2[100];
+
+    stock_file = fopen("stocks.csv", "r");
+
+    // GET TICKERS AND PRICE
+    while (fgets(line2, sizeof(line2), stock_file) && numTickers < MAX_TICKERS) {
+        if (sscanf(line2, "$%[^,],%f", tickers[numTickers].ticker, &tickers[numTickers].price) == 2) {
+            numTickers++;
+        }
+    }
+    fclose(stock_file);
+
+    printf("Available Tickers:\n");
+    for (int i = 0; i < numTickers; i++) {
+        printf("%d. %s\n", i + 1, tickers[i].ticker);
+    }
+
+    // CHOOSE TICKER
+    int choice;
+    printf("Enter the number corresponding to the ticker you want to purchase: ");
+    scanf("%d", &choice);
+
+    // CHECK IF CHOICE IS VALID
+    if (choice < 1 || choice > numTickers) {
+        printf("Invalid choice. Please enter a valid number.\n");
+        return;
+    }
+
+    printf("Price of $%s: $%.2f\n", tickers[choice - 1].ticker, tickers[choice - 1].price);
+
+    // QUANTITY OF SHARES
+    int shares;
+    printf("Enter the amount of shares you want to purchase: ");
+    scanf("%d", &shares);
+
+    double total_purchase = shares * (tickers[choice - 1].price);
+
+    // CONFIRM STOCK PURCHASE
+    printf("Confirm purchase order of: $%f? (yes/no)", total_purchase);
+    char confirm[10];
+    scanf("%s", confirm);
+
+    if (strcmp(confirm, "yes") == 0) {
+        user->balance -= total_purchase;
+        recordStockPurchase(user, tickers[choice - 1].ticker, shares);
+        printf("Purchase successful!\nCurrent balance: $%.2lf\n", user->balance);
+        updateUserBalance(user, user->balance);
+    } else {
+        printf("Order cancelled");
+    }
 }
 
 int main() {
     struct User user;
     int loggedIn = 0; 
-    FILE *file;
-
-    TickerInfo tickers[MAX_TICKERS]; // used later for stocks
-    int numTickers = 0; // used later for stocks
-    FILE *stock_file;
-    char line2[100];
-
 
     while (1) {
         if (!loggedIn) {
@@ -106,31 +268,32 @@ int main() {
                 } else {
                     printf("Name or PIN incorrect. Please try again.\n");
                 }
-
-            } else if (strcmp(response, "no") == 0) {
+            } 
+            else if (strcmp(response, "no") == 0) {
                 // NEW ACCOUNT
                 printf("Enter name: ");
                 scanf("%s", user.name);
                 
                 printf("Enter email: ");
-                scanf("%s", user.email);
+                scanf("%99s", user.email);
                 
                 do {
                     printf("Enter 4-DIGIT PIN: ");
                     scanf("%s", user.pin);
                 } while (!isValidPIN(user.pin));
-                
-                
-                printf("Enter your credit score: ");
+
+                user.credit_score = 0;
+                printf("Enter Credit Score: ");
                 scanf("%d", &user.credit_score);
+                
+                user.balance = 0.0;
+                user.debt = 0.0;
 
                 // Access clients.txt
                 FILE *file = fopen("clients.txt", "a");
-
-                user.balance = 0.0;
                 
                 // Save client data 
-                fprintf(file, "Name: %s | Email: %s | PIN: %s | Credit Score: %d | Balance: %.2lf\n", user.name, user.email, user.pin, user.credit_score, user.balance);
+                fprintf(file, "Name: %s | Email: %s | PIN: %s | Credit Score: %d | Balance: %.2lf | Debt: %.2lf\n", user.name, user.email, user.pin, user.credit_score, user.balance, user.debt);
                 fclose(file);
                 
                 printf("\n\nWelcome, account created!\n");
@@ -156,115 +319,19 @@ int main() {
             
             switch (choice) {
                 case 1:
-                    // CHECKING ACCOUNT
-                    printf("Enter the deposit amount: ");
-                    double initialDeposit;
-                    scanf("%lf", &initialDeposit);
-                    
-                    if (initialDeposit < 0) {
-                        printf("Invalid deposit amount.\n");
-                    } else {
-                        user.balance += initialDeposit;
-                        printf("Checking account opened with a balance of $%.2lf\n\n\n", user.balance);
-                        updateUserBalance(&user, user.balance); // Update balance in clients.txt
-                    }
+                    openCheckingAccount(&user); //open account (deposit)
                     break;
                 case 2:
-                    // ATM
-                    printf("\nBalance: %.2lf \n", user.balance);
-                    printf("1. Withdraw\n");
-                    printf("2. Deposit\n");
-                    printf("Enter your choice: ");
-                    int action;
-                    scanf("%d", &action);
-                    switch (action) {
-                        case 1:        
-                            printf("Enter the withdrawal amount: ");
-                            double withdrawalAmount;
-                            scanf("%lf", &withdrawalAmount);
-                            
-                            if (withdrawalAmount < 0 || withdrawalAmount > user.balance) {
-                                printf("Invalid withdrawal amount or insufficient funds.\n");
-                            } else {
-                                user.balance -= withdrawalAmount;
-                                printf("Withdrawal of $%.2lf successful.\nCurrent balance: $%.2lf\n", withdrawalAmount, user.balance);
-                                updateUserBalance(&user, user.balance); // Update balance in clients.txt
-                            }
-                            break;
-                        case 2:        
-                            printf("Enter the deposit amount: ");
-                            double depositAmount;
-                            scanf("%lf", &depositAmount);
-                            
-                            if (depositAmount < 0) {
-                                printf("Invalid deposit amount.\n");
-                            } else {
-                                user.balance += depositAmount;
-                                printf("Deposit of $%.2lf successful.\nCurrent balance: %.2lf\n", depositAmount, user.balance);
-                                updateUserBalance(&user, user.balance); // Update balance in clients.txt
-                            }
-                            break;
-                    }
+                    accessATM(&user); // ATM: Deposit or Withdraw
                     break;
                 case 3:
-                    // LOANS 
-                    printf("Loan feature is not implemented.\n");
+                    applyForLoan(&user); // Apply/get a loan
                     break;
                 case 4:
-                    stock_file = fopen("stocks.csv", "r");
-
-                    //GET TICKERS AND PRICE
-                    while (fgets(line2, sizeof(line2), stock_file) && numTickers < MAX_TICKERS) {
-                        if (sscanf(line2, "$%[^,],%f", tickers[numTickers].ticker, &tickers[numTickers].price) == 2) {
-                            numTickers++;
-                        }
-                    }
-                    fclose(stock_file);
-
-                    printf("Available Tickers:\n");
-                    for (int i = 0; i < numTickers; i++) {
-                        printf("%d. %s\n", i + 1, tickers[i].ticker);
-                    }
-
-                    // CHOOSE TICKER
-                    int choice;
-                    printf("Enter the number corresponding to the ticker you want to purchase: ");
-                    scanf("%d", &choice);
-
-                    // CHECK IF CHOICE IS VALID
-                    if (choice < 1 || choice > numTickers) {
-                        printf("Invalid choice. Please enter a valid number.\n");
-                        return 1;
-                    }
-
-                    printf("Price of $%s: $%.2f\n", tickers[choice - 1].ticker, tickers[choice - 1].price);
-
-                    // QUANTITY OF SHARES
-                    int shares;
-                    printf("Enter the amount of shares you want to purchase: ");
-                    scanf("%d", &shares);
-
-                    double total_purchase = shares * (tickers[choice - 1].price);
-
-                    // CONFIRM STOCK PURCHASE
-                    printf("Confirm purchase order of: $%f? (yes/no)", total_purchase);
-                    char confirm[10];
-                    scanf("%s", confirm);
-            
-                    if (strcmp(confirm, "yes") == 0) {
-                        user.balance -= total_purchase;
-                        recordStockPurchase(&user, tickers[choice - 1].ticker, shares);
-                        printf("Purchase successful!\nCurrent balance: $%.2lf\n", user.balance);
-                        updateUserBalance(&user, user.balance); 
-                        }
-                    else {
-                        printf("Order cancelled"); 
-                    }
-
+                    buyStocks(&user); //buy stocks
                     break;
-
                 case 5:
-                    // LOGOUT OF USER
+                    // LOGOUT
                     loggedIn = 0;
                     printf("Logged out successfully.\n");
                     break;

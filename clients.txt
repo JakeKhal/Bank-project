@@ -1,2 +1,3 @@
-Name: Jake | Email: Jakekhal12@icloud.com | PIN: 5253 | Credit Score: 740 | Balance: 800.09
+Name: jakekhal | Email: jakekhal12@icloud.com | PIN: 1234 | Credit Score: 700 | Balance: 13029.50 | Debt: 5151.00
+Name: john | Email: johnny@apple.com  | PIN: 5678 | Credit Score: 500 | Balance: 100.00 | Debt: 00.00
 
