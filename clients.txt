@@ -1,3 +1,4 @@
-Name: jakekhal | Email: jakekhal12@icloud.com | PIN: 1234 | Credit Score: 700 | Balance: 13029.50 | Debt: 5151.00
-Name: john | Email: johnny@apple.com  | PIN: 5678 | Credit Score: 500 | Balance: 100.00 | Debt: 00.00
-
+jake | Email: jkhal@uoregon.edu | PIN: 5253 | Credit Score: 750 | Balance: 11000.00 | Debt: 1010.00
+pat | Email: pat@gmail.com | PIN: 1234 | Credit Score: 600 | Balance: 8644.50 | Debt: 9090.00
+susan | Email: susan@gmail.com | PIN: 1234 | Credit Score: 700 | Balance: 8085.50 | Debt: 8080.00
+tony | Email: tony@outlook.com | PIN: 4747 | Credit Score: 500 | Balance: 900.00 | Debt: 909.00
